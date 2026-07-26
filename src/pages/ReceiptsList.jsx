@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getReceipts, deleteReceipt } from '../services/api';
+import { getReceipts, deleteReceipt, updateReceipt } from '../services/api';
 import { exportReceiptsToExcel } from '../utils/excelExport';
-import { Trash2, Search, FileDown, Filter } from 'lucide-react';
+import { Trash2, Edit2, Search, FileDown, Filter, X, Save, AlertTriangle } from 'lucide-react';
 
 const ReceiptsList = () => {
   const [receipts, setReceipts] = useState([]);
@@ -13,6 +13,27 @@ const ReceiptsList = () => {
   const [selectedStore, setSelectedStore] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
+
+  // حالات نافذة التعديل
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    id: '',
+    storeName: '',
+    amount: '',
+    date: '',
+    notes: ''
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // حالة نافذة التأكيد المخصصة (Custom Confirm Dialog)
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    type: 'delete', // 'delete' or 'edit'
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     fetchData();
@@ -29,15 +50,84 @@ const ReceiptsList = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الوصل؟')) {
-      try {
-        await deleteReceipt(id);
-        setReceipts(receipts.filter(r => r.id !== id));
-      } catch (err) {
-        alert('حدث خطأ أثناء الحذف.');
-      }
+  // فتح نافذة تأكيد الحذف
+  const handleDeleteClick = (id) => {
+    setConfirmDialog({
+      isOpen: true,
+      type: 'delete',
+      title: 'تأكيد حذف الوصل',
+      message: '⚠️ تنبيه: هل أنت متأكد تماماً من رغبتك في حذف هذا الوصل نهائياً؟ لا يمكن التراجع عن هذه الخطوة.',
+      onConfirm: () => executeDelete(id)
+    });
+  };
+
+  const executeDelete = async (id) => {
+    try {
+      await deleteReceipt(id);
+      setReceipts(receipts.filter(r => r.id !== id));
+    } catch (err) {
+      alert('حدث خطأ أثناء الحذف.');
     }
+  };
+
+  // فتح مودال التعديل
+  const openEditModal = (receipt) => {
+    setEditFormData({
+      id: receipt.id,
+      storeName: receipt.store_name,
+      amount: receipt.amount,
+      date: receipt.date,
+      notes: receipt.notes || ''
+    });
+    setEditError('');
+    setIsEditModalOpen(true);
+  };
+
+  // فتح نافذة تأكيد التعديل قبل الحفظ
+  const handleEditSubmitClick = (e) => {
+    e.preventDefault();
+    if (!editFormData.storeName || !editFormData.amount || !editFormData.date) {
+      setEditError('يرجى ملء جميع الحقول المطلوبة');
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      type: 'edit',
+      title: 'تأكيد تعديل الوصل',
+      message: 'هل أنت متأكد من رغبتك في حفظ التعديلات الجديدة على هذا الوصل؟',
+      onConfirm: () => executeEdit()
+    });
+  };
+
+  const executeEdit = async () => {
+    setEditLoading(true);
+    setEditError('');
+    
+    try {
+      await updateReceipt(editFormData.id, editFormData);
+      // تحديث البيانات محلياً في الصفحة
+      setReceipts(receipts.map(r => 
+        r.id === editFormData.id 
+          ? { 
+              ...r, 
+              store_name: editFormData.storeName, 
+              amount: parseFloat(editFormData.amount), 
+              date: editFormData.date, 
+              notes: editFormData.notes 
+            } 
+          : r
+      ));
+      setIsEditModalOpen(false);
+    } catch (err) {
+      setEditError('حدث خطأ أثناء حفظ التعديلات. حاول مجدداً.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleEditChange = (e) => {
+    setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
   };
 
   // استخراج المذاخر الفريدة للتصفية
@@ -196,14 +286,24 @@ const ReceiptsList = () => {
                     <td className="text-danger" style={{ fontWeight: 'bold' }}>{receipt.amount.toLocaleString()} د.ع</td>
                     <td className="text-muted">{receipt.notes || '-'}</td>
                     <td>
-                      <button 
-                        onClick={() => handleDelete(receipt.id)} 
-                        className="btn btn-danger"
-                        style={{ padding: '0.5rem', borderRadius: '6px' }}
-                        title="حذف"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                          onClick={() => openEditModal(receipt)} 
+                          className="btn btn-outline"
+                          style={{ padding: '0.5rem', borderRadius: '6px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                          title="تعديل"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteClick(receipt.id)} 
+                          className="btn btn-danger"
+                          style={{ padding: '0.5rem', borderRadius: '6px' }}
+                          title="حذف"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -214,6 +314,128 @@ const ReceiptsList = () => {
           <p className="text-muted text-center" style={{ padding: '2rem 0' }}>لا توجد وصولات مطابقة للفلاتر المحددة.</p>
         )}
       </div>
+
+      {/* نافذة التعديل المنبثقة (Modal) */}
+      {isEditModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content card">
+            <div className="modal-header flex justify-between items-center mb-4">
+              <h2 style={{ margin: 0 }}>تعديل بيانات الوصل</h2>
+              <button className="btn btn-outline" style={{ padding: '0.25rem', borderRadius: '50%' }} onClick={() => setIsEditModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="text-danger mb-4" style={{ padding: '0.75rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}>
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleEditSubmitClick}>
+              <div className="form-group">
+                <label>اسم المذخر *</label>
+                <input 
+                  type="text" 
+                  name="storeName" 
+                  value={editFormData.storeName} 
+                  onChange={handleEditChange} 
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>قيمة الوصل (بالدينار) *</label>
+                <input 
+                  type="number" 
+                  name="amount" 
+                  value={editFormData.amount} 
+                  onChange={handleEditChange} 
+                  min="0"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>تاريخ الوصل *</label>
+                <input 
+                  type="date" 
+                  name="date" 
+                  value={editFormData.date} 
+                  onChange={handleEditChange} 
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>ملاحظات</label>
+                <textarea 
+                  name="notes" 
+                  value={editFormData.notes} 
+                  onChange={handleEditChange} 
+                  rows="3" 
+                />
+              </div>
+
+              <div className="flex gap-4 mt-4" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-outline" onClick={() => setIsEditModalOpen(false)}>
+                  إلغاء
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  <Save size={18} />
+                  حفظ التعديلات
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة التأكيد المخصصة بدقة عالية (Custom Confirmation Modal) */}
+      {confirmDialog.isOpen && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="modal-content card" style={{ maxWidth: '420px', textAlign: 'center', padding: '2.5rem 2rem' }}>
+            <div style={{ 
+              display: 'inline-flex', 
+              padding: '1rem', 
+              borderRadius: '50%', 
+              backgroundColor: confirmDialog.type === 'delete' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)', 
+              color: confirmDialog.type === 'delete' ? 'var(--danger)' : 'var(--primary)',
+              marginBottom: '1.5rem'
+            }}>
+              <AlertTriangle size={36} />
+            </div>
+
+            <h3 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>{confirmDialog.title}</h3>
+            
+            <p className="text-muted" style={{ marginBottom: '2rem', fontSize: '0.95rem', lineHeight: '1.6' }}>
+              {confirmDialog.message}
+            </p>
+            
+            <div className="flex gap-4" style={{ justifyContent: 'center' }}>
+              <button 
+                type="button" 
+                className="btn btn-outline" 
+                onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                style={{ flex: 1 }}
+              >
+                إلغاء
+              </button>
+              <button 
+                type="button" 
+                className={`btn ${confirmDialog.type === 'delete' ? 'btn-danger' : 'btn-primary'}`}
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog({ ...confirmDialog, isOpen: false });
+                }}
+                style={{ flex: 1 }}
+              >
+                تأكيد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

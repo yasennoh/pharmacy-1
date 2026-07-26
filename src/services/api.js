@@ -65,6 +65,26 @@ export const getReceipts = async () => {
   return data;
 };
 
+// تحديث وصل موجود
+export const updateReceipt = async (id, updatedReceipt) => {
+  const { data, error } = await supabase
+    .from('receipts')
+    .update({
+      store_name: updatedReceipt.storeName,
+      amount: parseFloat(updatedReceipt.amount),
+      date: updatedReceipt.date,
+      notes: updatedReceipt.notes,
+    })
+    .eq('id', id)
+    .select();
+
+  if (error) {
+    console.error('Error updating receipt:', error);
+    throw error;
+  }
+  return data;
+};
+
 // حذف وصل
 export const deleteReceipt = async (id) => {
   const { data, error } = await supabase
@@ -78,4 +98,3 @@ export const deleteReceipt = async (id) => {
   }
   return data;
 };
-
