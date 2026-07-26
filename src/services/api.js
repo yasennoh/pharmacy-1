@@ -1,5 +1,35 @@
 import { supabase } from '../supabaseClient';
 
+// تسجيل الدخول
+export const signIn = async (email, password) => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// تسجيل الخروج
+export const signOut = async () => {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+};
+
+// الحصول على المستخدم الحالي
+export const getCurrentUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+};
+
+// مراقبة حالة تسجيل الدخول
+export const onAuthStateChange = (callback) => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user || null);
+  });
+  return subscription;
+};
+
 // اضافة وصل جديد
 export const addReceipt = async (receipt) => {
   const { data, error } = await supabase
@@ -48,3 +78,4 @@ export const deleteReceipt = async (id) => {
   }
   return data;
 };
+
