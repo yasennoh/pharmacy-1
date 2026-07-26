@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getReceipts } from '../services/api';
-import { DollarSign, Building2, TrendingUp, Calendar } from 'lucide-react';
+import { exportDashboardToExcel } from '../utils/excelExport';
+import { DollarSign, Building2, TrendingUp, Calendar, FileDown } from 'lucide-react';
 
 const Dashboard = () => {
   const [receipts, setReceipts] = useState([]);
@@ -33,19 +34,35 @@ const Dashboard = () => {
     return acc;
   }, {});
 
+  const handleExportExcel = () => {
+    if (filteredReceipts.length === 0) {
+      alert('لا توجد بيانات لتصديرها لهذا الشهر.');
+      return;
+    }
+    exportDashboardToExcel(selectedMonth, storesTotal, filteredReceipts);
+  };
+
   if (loading) return <div className="page-title">جاري التحميل...</div>;
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4" style={{ flexWrap: 'wrap', gap: '1rem' }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>لوحة التحكم والتقارير</h1>
-        <div className="form-group" style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'center' }}>
-          <label style={{ margin: 0 }}>اختر الشهر:</label>
-          <input 
-            type="month" 
-            value={selectedMonth} 
-            onChange={(e) => setSelectedMonth(e.target.value)} 
-          />
+        
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ marginBottom: 0, flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ margin: 0 }}>اختر الشهر:</label>
+            <input 
+              type="month" 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(e.target.value)} 
+            />
+          </div>
+
+          <button onClick={handleExportExcel} className="btn btn-outline" style={{ borderColor: 'var(--success)', color: 'var(--success)' }}>
+            <FileDown size={20} />
+            <span>تحميل تقرير Excel</span>
+          </button>
         </div>
       </div>
 
@@ -84,7 +101,7 @@ const Dashboard = () => {
       </div>
 
       <div className="card mt-4">
-        <h2 className="flex items-center gap-4 mb-4"><TrendingUp /> تفاصيل المذاخر لهذا الشهر</h2>
+        <h2 className="flex items-center gap-4 mb-4"><TrendingUp /> تفاصيل المذاخر لهذا الشهر ({selectedMonth})</h2>
         {Object.keys(storesTotal).length > 0 ? (
           <div className="table-container">
             <table>
