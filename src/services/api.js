@@ -40,6 +40,8 @@ export const addReceipt = async (receipt) => {
         amount: parseFloat(receipt.amount),
         date: receipt.date,
         notes: receipt.notes,
+        returns: parseFloat(receipt.returns || 0),
+        paid_amount: parseFloat(receipt.paidAmount || 0),
       }
     ])
     .select();
@@ -74,6 +76,8 @@ export const updateReceipt = async (id, updatedReceipt) => {
       amount: parseFloat(updatedReceipt.amount),
       date: updatedReceipt.date,
       notes: updatedReceipt.notes,
+      returns: parseFloat(updatedReceipt.returns || 0),
+      paid_amount: parseFloat(updatedReceipt.paidAmount || 0),
     })
     .eq('id', id)
     .select();

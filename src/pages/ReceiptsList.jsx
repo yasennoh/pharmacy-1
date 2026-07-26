@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getReceipts, deleteReceipt, updateReceipt } from '../services/api';
 import { exportReceiptsToExcel } from '../utils/excelExport';
-import { Trash2, Edit2, Search, FileDown, Filter, X, Save, AlertTriangle } from 'lucide-react';
+import { Trash2, Edit2, Search, FileDown, Filter, X, Save, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
 const ReceiptsList = () => {
   const [receipts, setReceipts] = useState([]);
@@ -13,6 +13,7 @@ const ReceiptsList = () => {
   const [selectedStore, setSelectedStore] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All'); // 'All', 'paid', 'partial', 'unpaid'
 
   // حالات نافذة التعديل
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -20,6 +21,8 @@ const ReceiptsList = () => {
     id: '',
     storeName: '',
     amount: '',
+    returns: '0',
+    paidAmount: '0',
     date: '',
     notes: ''
   });
@@ -76,6 +79,8 @@ const ReceiptsList = () => {
       id: receipt.id,
       storeName: receipt.store_name,
       amount: receipt.amount,
+      returns: receipt.returns || 0,
+      paidAmount: receipt.paid_amount || 0,
       date: receipt.date,
       notes: receipt.notes || ''
     });
@@ -95,7 +100,7 @@ const ReceiptsList = () => {
       isOpen: true,
       type: 'edit',
       title: 'تأكيد تعديل الوصل',
-      message: 'هل أنت متأكد من رغبتك في حفظ التعديلات الجديدة على هذا الوصل؟',
+      message: 'هل أنت متأكد من رغبتك في حفظ التعديلات الجديدة على هذا الوصل؟ سيتم تحديث الحسابات فوراً.',
       onConfirm: () => executeEdit()
     });
   };
@@ -113,6 +118,8 @@ const ReceiptsList = () => {
               ...r, 
               store_name: editFormData.storeName, 
               amount: parseFloat(editFormData.amount), 
+              returns: parseFloat(editFormData.returns || 0),
+              paid_amount: parseFloat(editFormData.paidAmount || 0),
               date: editFormData.date, 
               notes: editFormData.notes 
             } 
@@ -157,6 +164,11 @@ const ReceiptsList = () => {
   const filteredReceipts = receipts.filter(receipt => {
     const year = receipt.date.substring(0, 4);
     const month = receipt.date.substring(5, 7);
+    
+    const amt = receipt.amount || 0;
+    const ret = receipt.returns || 0;
+    const paid = receipt.paid_amount || 0;
+    const remaining = amt - ret - paid;
 
     const matchesSearch = 
       receipt.store_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -166,11 +178,25 @@ const ReceiptsList = () => {
     const matchesStore = selectedStore === 'All' || receipt.store_name === selectedStore;
     const matchesYear = selectedYear === 'All' || year === selectedYear;
     const matchesMonth = selectedMonth === 'All' || month === selectedMonth;
+    
+    // فلترة حسب حالة السداد
+    let matchesStatus = true;
+    if (selectedStatus === 'paid') {
+      matchesStatus = remaining <= 0;
+    } else if (selectedStatus === 'partial') {
+      matchesStatus = remaining > 0 && paid > 0;
+    } else if (selectedStatus === 'unpaid') {
+      matchesStatus = remaining > 0 && paid === 0;
+    }
 
-    return matchesSearch && matchesStore && matchesYear && matchesMonth;
+    return matchesSearch && matchesStore && matchesYear && matchesMonth && matchesStatus;
   });
 
-  const totalFilteredAmount = filteredReceipts.reduce((sum, r) => sum + r.amount, 0);
+  // حساب إجماليات البيانات المعروضة
+  const totalAmount = filteredReceipts.reduce((sum, r) => sum + r.amount, 0);
+  const totalReturns = filteredReceipts.reduce((sum, r) => sum + (r.returns || 0), 0);
+  const totalPaid = filteredReceipts.reduce((sum, r) => sum + (r.paid_amount || 0), 0);
+  const totalRemaining = totalAmount - totalReturns - totalPaid;
 
   const handleExport = () => {
     if (filteredReceipts.length === 0) {
@@ -179,6 +205,63 @@ const ReceiptsList = () => {
     }
     const filterLabel = `تصدير_سجل_${selectedStore !== 'All' ? selectedStore : 'كل_المذاخر'}_شفر_${selectedMonth !== 'All' ? selectedMonth : 'كل_الاشهر'}_سنة_${selectedYear !== 'All' ? selectedYear : 'كل_السنوات'}`;
     exportReceiptsToExcel(filteredReceipts, `${filterLabel}.xlsx`);
+  };
+
+  // دالة لتوليد شارة حالة السداد بشكل جميل
+  const renderStatusBadge = (amount, returnsVal, paidVal) => {
+    const remaining = amount - (returnsVal || 0) - (paidVal || 0);
+    if (remaining <= 0) {
+      return (
+        <span style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: '0.25rem', 
+          padding: '0.25rem 0.5rem', 
+          borderRadius: '20px', 
+          fontSize: '0.8rem', 
+          fontWeight: 'bold',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+          color: 'var(--success)' 
+        }}>
+          <CheckCircle size={12} />
+          مسدد بالكامل
+        </span>
+      );
+    } else if (paidVal > 0) {
+      return (
+        <span style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: '0.25rem', 
+          padding: '0.25rem 0.5rem', 
+          borderRadius: '20px', 
+          fontSize: '0.8rem', 
+          fontWeight: 'bold',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+          color: '#D97706' 
+        }}>
+          <Clock size={12} />
+          مسدد جزئياً
+        </span>
+      );
+    } else {
+      return (
+        <span style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: '0.25rem', 
+          padding: '0.25rem 0.5rem', 
+          borderRadius: '20px', 
+          fontSize: '0.8rem', 
+          fontWeight: 'bold',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+          color: 'var(--danger)' 
+        }}>
+          <AlertTriangle size={12} />
+          غير مسدد
+        </span>
+      );
+    }
   };
 
   return (
@@ -199,7 +282,7 @@ const ReceiptsList = () => {
           خيارات التصفية والبحث
         </h3>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
           {/* بحث نصي */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>البحث السريع:</label>
@@ -207,7 +290,7 @@ const ReceiptsList = () => {
               <Search size={16} style={{ position: 'absolute', right: '10px', color: 'var(--text-muted)' }} />
               <input 
                 type="text" 
-                placeholder="بحث عن مذخر، مبلغ، ملاحظات..." 
+                placeholder="مذخر، مبلغ، ملاحظات..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ paddingRight: '35px', width: '100%' }}
@@ -247,17 +330,40 @@ const ReceiptsList = () => {
               ))}
             </select>
           </div>
+
+          {/* فلتر حالة السداد */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>حالة السداد:</label>
+            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+              <option value="All">كل الفواتير</option>
+              <option value="paid">مسدد بالكامل</option>
+              <option value="partial">مسدد جزئياً</option>
+              <option value="unpaid">غير مسدد</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* ملخص الفلترة الحالية */}
-      <div className="card mb-4" style={{ padding: '1rem', backgroundColor: 'rgba(99, 102, 241, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="card mb-4" style={{ padding: '1.25rem', backgroundColor: 'rgba(99, 102, 241, 0.05)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', alignItems: 'center' }}>
         <div>
-          <span>مجموع المبالغ المفلترة: </span>
-          <strong className="text-danger" style={{ fontSize: '1.2rem' }}>{totalFilteredAmount.toLocaleString()} د.ع</strong>
+          <span className="text-muted" style={{ fontSize: '0.85rem' }}>المبلغ الإجمالي: </span>
+          <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{totalAmount.toLocaleString()} د.ع</div>
         </div>
-        <div className="text-muted">
-          عدد الوصولات: {filteredReceipts.length}
+        <div>
+          <span className="text-muted" style={{ fontSize: '0.85rem' }}>إجمالي الراجع: </span>
+          <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-muted)' }}>{totalReturns.toLocaleString()} د.ع</div>
+        </div>
+        <div>
+          <span className="text-muted" style={{ fontSize: '0.85rem' }}>إجمالي المسدد: </span>
+          <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--success)' }}>{totalPaid.toLocaleString()} د.ع</div>
+        </div>
+        <div>
+          <span className="text-muted" style={{ fontSize: '0.85rem' }}>الدين المتبقي: </span>
+          <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--danger)' }}>{totalRemaining.toLocaleString()} د.ع</div>
+        </div>
+        <div style={{ textAlign: 'left', fontWeight: '600' }}>
+          عدد الفواتير: {filteredReceipts.length}
         </div>
       </div>
 
@@ -274,39 +380,58 @@ const ReceiptsList = () => {
                   <th>التاريخ</th>
                   <th>اسم المذخر</th>
                   <th>قيمة الوصل</th>
+                  <th>الراجع</th>
+                  <th>المسدد</th>
+                  <th>المتبقي</th>
+                  <th>الحالة</th>
                   <th>ملاحظات</th>
                   <th>إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredReceipts.map(receipt => (
-                  <tr key={receipt.id}>
-                    <td>{receipt.date}</td>
-                    <td style={{ fontWeight: 'bold' }}>{receipt.store_name}</td>
-                    <td className="text-danger" style={{ fontWeight: 'bold' }}>{receipt.amount.toLocaleString()} د.ع</td>
-                    <td className="text-muted">{receipt.notes || '-'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button 
-                          onClick={() => openEditModal(receipt)} 
-                          className="btn btn-outline"
-                          style={{ padding: '0.5rem', borderRadius: '6px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
-                          title="تعديل"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteClick(receipt.id)} 
-                          className="btn btn-danger"
-                          style={{ padding: '0.5rem', borderRadius: '6px' }}
-                          title="حذف"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredReceipts.map(receipt => {
+                  const amt = receipt.amount || 0;
+                  const ret = receipt.returns || 0;
+                  const paid = receipt.paid_amount || 0;
+                  const remaining = amt - ret - paid;
+
+                  return (
+                    <tr key={receipt.id}>
+                      <td>{receipt.date}</td>
+                      <td style={{ fontWeight: 'bold' }}>{receipt.store_name}</td>
+                      <td>{amt.toLocaleString()} د.ع</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{ret > 0 ? `${ret.toLocaleString()} د.ع` : '-'}</td>
+                      <td className="text-success">{paid > 0 ? `${paid.toLocaleString()} د.ع` : '-'}</td>
+                      <td style={{ fontWeight: 'bold', color: remaining > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                        {remaining.toLocaleString()} د.ع
+                      </td>
+                      <td>{renderStatusBadge(amt, ret, paid)}</td>
+                      <td className="text-muted" style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={receipt.notes}>
+                        {receipt.notes || '-'}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button 
+                            onClick={() => openEditModal(receipt)} 
+                            className="btn btn-outline"
+                            style={{ padding: '0.5rem', borderRadius: '6px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                            title="تعديل"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteClick(receipt.id)} 
+                            className="btn btn-danger"
+                            style={{ padding: '0.5rem', borderRadius: '6px' }}
+                            title="حذف"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -318,7 +443,7 @@ const ReceiptsList = () => {
       {/* نافذة التعديل المنبثقة (Modal) */}
       {isEditModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content card">
+          <div className="modal-content card" style={{ maxWidth: '600px' }}>
             <div className="modal-header flex justify-between items-center mb-4">
               <h2 style={{ margin: 0 }}>تعديل بيانات الوصل</h2>
               <button className="btn btn-outline" style={{ padding: '0.25rem', borderRadius: '50%' }} onClick={() => setIsEditModalOpen(false)}>
@@ -344,27 +469,53 @@ const ReceiptsList = () => {
                 />
               </div>
 
-              <div className="form-group">
-                <label>قيمة الوصل (بالدينار) *</label>
-                <input 
-                  type="number" 
-                  name="amount" 
-                  value={editFormData.amount} 
-                  onChange={handleEditChange} 
-                  min="0"
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>قيمة الوصل الأساسية *</label>
+                  <input 
+                    type="number" 
+                    name="amount" 
+                    value={editFormData.amount} 
+                    onChange={handleEditChange} 
+                    min="0"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>الراجع / المردود</label>
+                  <input 
+                    type="number" 
+                    name="returns" 
+                    value={editFormData.returns} 
+                    onChange={handleEditChange} 
+                    min="0"
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>تاريخ الوصل *</label>
-                <input 
-                  type="date" 
-                  name="date" 
-                  value={editFormData.date} 
-                  onChange={handleEditChange} 
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>المبلغ المسدد (المدفوع)</label>
+                  <input 
+                    type="number" 
+                    name="paidAmount" 
+                    value={editFormData.paidAmount} 
+                    onChange={handleEditChange} 
+                    min="0"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>تاريخ الوصل *</label>
+                  <input 
+                    type="date" 
+                    name="date" 
+                    value={editFormData.date} 
+                    onChange={handleEditChange} 
+                    required
+                  />
+                </div>
               </div>
 
               <div className="form-group">
@@ -375,6 +526,14 @@ const ReceiptsList = () => {
                   onChange={handleEditChange} 
                   rows="3" 
                 />
+              </div>
+
+              {/* الحسبة الحية للمعاينة في المودال */}
+              <div style={{ padding: '0.75rem', backgroundColor: 'rgba(99, 102, 241, 0.05)', borderRadius: '8px', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                <span style={{ fontWeight: 'bold' }}>معاينة الحساب المعدل: </span>
+                المتبقي (الدين): <strong style={{ color: (editFormData.amount - (editFormData.returns || 0) - (editFormData.paidAmount || 0)) > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                  {(editFormData.amount - (editFormData.returns || 0) - (editFormData.paidAmount || 0)).toLocaleString()} د.ع
+                </strong>
               </div>
 
               <div className="flex gap-4 mt-4" style={{ justifyContent: 'flex-end' }}>
