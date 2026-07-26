@@ -1,30 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import AddReceipt from './pages/AddReceipt';
 import ReceiptsList from './pages/ReceiptsList';
 import Login from './pages/Login';
 import { onAuthStateChange, getCurrentUser } from './services/api';
+import { Menu, Pill } from 'lucide-react';
 
 function App() {
   const [theme, setTheme] = useState('light');
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // إغلاق القائمة الجانبية تلقائياً عند تغيير الصفحة (لشاشات الهاتف)
   useEffect(() => {
-    // التحقق من الجلسة الحالية عند تحميل التطبيق
+    setIsSidebarOpen(false);
+  }, [location]);
+
+  useEffect(() => {
     getCurrentUser().then(currentUser => {
       setUser(currentUser);
       setLoading(false);
     });
 
-    // الاستماع لأي تغيير في حالة تسجيل الدخول
     const subscription = onAuthStateChange((currentUser) => {
       setUser(currentUser);
       if (!currentUser) {
@@ -53,7 +60,6 @@ function App() {
     );
   }
 
-  // إذا لم يكن المستخدم مسجلاً، اعرض واجهة تسجيل الدخول فقط
   if (!user) {
     return (
       <Routes>
@@ -64,7 +70,29 @@ function App() {
 
   return (
     <div className="app-container">
-      <Sidebar theme={theme} toggleTheme={toggleTheme} />
+      {/* الشريط العلوي للهاتف (يظهر فقط على الشاشات الصغيرة عبر CSS) */}
+      <header className="mobile-header">
+        <button className="btn btn-outline mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
+          <Menu size={24} />
+        </button>
+        <div className="flex items-center gap-4" style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+          <Pill size={24} />
+          <span>نظام الصيدلية</span>
+        </div>
+      </header>
+
+      {/* خلفية معتمة عند فتح القائمة على الهاتف لإغلاقها بالنقر في أي مكان */}
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)}></div>
+      )}
+
+      <Sidebar 
+        theme={theme} 
+        toggleTheme={toggleTheme} 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
+
       <main className="main-content">
         <Routes>
           <Route path="/" element={<Dashboard />} />

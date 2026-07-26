@@ -318,4 +318,90 @@ tr:hover td {
   }
 }
 
+/* Mobile & Responsive Styles */
+.mobile-header {
+  display: none;
+}
+
+.mobile-close-btn {
+  display: none !important;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .mobile-menu-btn {
+    padding: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    right: -260px; /* مخفية بشكل افتراضي خارج الشاشة */
+    width: 250px;
+    height: 100vh;
+    z-index: 200;
+    box-shadow: -4px 0 10px rgba(0,0,0,0.1);
+    transition: right 0.3s ease-in-out;
+  }
+
+  .sidebar.open {
+    right: 0; /* انزلاق لداخل الشاشة */
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 150;
+    backdrop-filter: blur(2px);
+  }
+
+  .mobile-close-btn {
+    display: inline-flex !important;
+  }
+
+  .main-content {
+    padding: 1.25rem;
+    width: 100%;
+  }
+
+  /* تعديل مقاس النوافذ المنبثقة على الهواتف */
+  .modal-content {
+    width: 92%;
+    margin: 1rem;
+    padding: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+}
+
+
 

@@ -1,9 +1,9 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FilePlus, List, Moon, Sun, Pill, LogOut } from 'lucide-react';
+import { LayoutDashboard, FilePlus, List, Moon, Sun, Pill, LogOut, X } from 'lucide-react';
 import { signOut } from '../services/api';
 
-const Sidebar = ({ theme, toggleTheme }) => {
+const Sidebar = ({ theme, toggleTheme, isOpen, onClose }) => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -18,10 +18,16 @@ const Sidebar = ({ theme, toggleTheme }) => {
   };
 
   return (
-    <aside className="sidebar">
-      <div className="flex items-center gap-4 mb-4" style={{ color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold' }}>
-        <Pill size={32} />
-        <span>نظام الصيدلية</span>
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4" style={{ color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold' }}>
+          <Pill size={32} />
+          <span>نظام الصيدلية</span>
+        </div>
+        {/* زر إغلاق القائمة (يظهر على الهواتف فقط عبر CSS) */}
+        <button className="btn btn-outline mobile-close-btn" onClick={onClose} style={{ padding: '0.25rem', borderRadius: '50%' }}>
+          <X size={20} />
+        </button>
       </div>
       
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
