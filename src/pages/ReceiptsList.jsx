@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getReceipts, deleteReceipt, updateReceipt } from '../services/api';
 import { exportReceiptsToExcel } from '../utils/excelExport';
-import { Trash2, Edit2, Search, FileDown, Filter, X, Save, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Trash2, Edit2, Search, FileDown, Filter, X, Save, AlertTriangle, CheckCircle, Clock, Check } from 'lucide-react';
 
 const ReceiptsList = () => {
   const [receipts, setReceipts] = useState([]);
@@ -13,7 +13,7 @@ const ReceiptsList = () => {
   const [selectedStore, setSelectedStore] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState('All'); // 'All', 'paid', 'partial', 'unpaid'
+  const [selectedStatus, setSelectedStatus] = useState('All');
 
   // حالات نافذة التعديل
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -32,7 +32,7 @@ const ReceiptsList = () => {
   // حالة نافذة التأكيد المخصصة (Custom Confirm Dialog)
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
-    type: 'delete', // 'delete' or 'edit'
+    type: 'delete', // 'delete', 'edit', or 'settle'
     title: '',
     message: '',
     onConfirm: () => {}
@@ -70,6 +70,40 @@ const ReceiptsList = () => {
       setReceipts(receipts.filter(r => r.id !== id));
     } catch (err) {
       alert('حدث خطأ أثناء الحذف.');
+    }
+  };
+
+  // فتح نافذة تأكيد التسديد الكامل للوصل
+  const handleSettleClick = (receipt) => {
+    const netAmount = receipt.amount - (receipt.returns || 0);
+    setConfirmDialog({
+      isOpen: true,
+      type: 'settle',
+      title: 'تأكيد سداد الوصل بالكامل',
+      message: `هل أنت متأكد من رغبتك في سداد هذا الوصل بالكامل؟ سيتم دفع القيمة الصافية المتبقية (${(netAmount - (receipt.paid_amount || 0)).toLocaleString()} د.ع)، ويصبح هذا الوصل مسدداً بالكامل.`,
+      onConfirm: () => executeSettle(receipt, netAmount)
+    });
+  };
+
+  const executeSettle = async (receipt, netAmount) => {
+    try {
+      const updatedFields = {
+        storeName: receipt.store_name,
+        amount: receipt.amount,
+        returns: receipt.returns || 0,
+        paidAmount: netAmount, // تسديد القيمة الصافية كاملة
+        date: receipt.date,
+        notes: receipt.notes
+      };
+      
+      await updateReceipt(receipt.id, updatedFields);
+      
+      // تحديث الحالة محلياً في الجدول
+      setReceipts(receipts.map(r => 
+        r.id === receipt.id ? { ...r, paid_amount: netAmount } : r
+      ));
+    } catch (err) {
+      alert('حدث خطأ أثناء تسديد الفاتورة.');
     }
   };
 
@@ -111,7 +145,6 @@ const ReceiptsList = () => {
     
     try {
       await updateReceipt(editFormData.id, editFormData);
-      // تحديث البيانات محلياً في الصفحة
       setReceipts(receipts.map(r => 
         r.id === editFormData.id 
           ? { 
@@ -179,7 +212,6 @@ const ReceiptsList = () => {
     const matchesYear = selectedYear === 'All' || year === selectedYear;
     const matchesMonth = selectedMonth === 'All' || month === selectedMonth;
     
-    // فلترة حسب حالة السداد
     let matchesStatus = true;
     if (selectedStatus === 'paid') {
       matchesStatus = remaining <= 0;
@@ -406,26 +438,47 @@ const ReceiptsList = () => {
                         {remaining.toLocaleString()} د.ع
                       </td>
                       <td>{renderStatusBadge(amt, ret, paid)}</td>
-                      <td className="text-muted" style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={receipt.notes}>
+                      <td className="text-muted" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={receipt.notes}>
                         {receipt.notes || '-'}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                          {remaining > 0 && (
+                            <button 
+                              onClick={() => handleSettleClick(receipt)} 
+                              className="btn btn-outline"
+                              style={{ 
+                                padding: '0.4rem 0.6rem', 
+                                borderRadius: '6px', 
+                                borderColor: 'var(--success)', 
+                                color: 'var(--success)',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.2rem'
+                              }}
+                              title="تسديد الفاتورة بالكامل"
+                            >
+                              <Check size={14} />
+                              تسديد
+                            </button>
+                          )}
                           <button 
                             onClick={() => openEditModal(receipt)} 
                             className="btn btn-outline"
-                            style={{ padding: '0.5rem', borderRadius: '6px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                            style={{ padding: '0.4rem', borderRadius: '6px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
                             title="تعديل"
                           >
-                            <Edit2 size={16} />
+                            <Edit2 size={15} />
                           </button>
                           <button 
                             onClick={() => handleDeleteClick(receipt.id)} 
                             className="btn btn-danger"
-                            style={{ padding: '0.5rem', borderRadius: '6px' }}
+                            style={{ padding: '0.4rem', borderRadius: '6px' }}
                             title="حذف"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </td>
@@ -558,11 +611,11 @@ const ReceiptsList = () => {
               display: 'inline-flex', 
               padding: '1rem', 
               borderRadius: '50%', 
-              backgroundColor: confirmDialog.type === 'delete' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)', 
-              color: confirmDialog.type === 'delete' ? 'var(--danger)' : 'var(--primary)',
+              backgroundColor: confirmDialog.type === 'delete' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', 
+              color: confirmDialog.type === 'delete' ? 'var(--danger)' : 'var(--success)',
               marginBottom: '1.5rem'
             }}>
-              <AlertTriangle size={36} />
+              {confirmDialog.type === 'delete' ? <AlertTriangle size={36} /> : <CheckCircle size={36} />}
             </div>
 
             <h3 style={{ marginBottom: '1rem', fontSize: '1.3rem' }}>{confirmDialog.title}</h3>
